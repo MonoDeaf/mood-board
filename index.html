@@ -1,0 +1,1112 @@
+<html><head><base href="." /><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Moodboard Creator</title>
+<style>
+  :root {
+    --bg: #090909;
+    --fg: #111111;
+    --border: #1e1e1e;
+    --text: #d6dcdc;
+    --dot-inactive: rgba(214, 220, 220, 0.3);
+    --dot-active: rgba(214, 220, 220, 1);
+    --grid-opacity: 0.05;  /* Very dim opacity for grid lines */
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none; /* Prevents text selection */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+
+  *:focus {
+    outline: none;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .toolbar {
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    justify-content: center; /* Center aligns the buttons */
+  }
+
+  button {
+    background: var(--fg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    background: var(--border);
+  }
+
+  .moodboard {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: calc(100vh - 100px);
+    position: relative;
+    padding: 20px;
+    background-image: 
+      linear-gradient(rgba(30, 30, 30, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 30, 30, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px; /* Reduced grid size from 40px to 20px */
+    background-color: var(--bg);
+    background-position: -1px -1px;
+    background-blend-mode: overlay;
+  }
+
+  .item {
+    position: absolute;
+    background: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    padding-right: 30px; /* Increased to accommodate delete button */
+    cursor: move;
+    min-width: 100px;
+    max-width: 300px;
+    overflow: visible; /* Allow resize handle to be visible */
+    z-index: 1; /* Raise normal items above connection lines */
+  }
+
+  .item img {
+    max-width: 100%;
+    border-radius: 4px;
+    resize: both;
+    overflow: auto;
+    pointer-events: auto; /* Enable interactions for resizing */
+    display: block; /* Add this to ensure proper layout */
+    min-width: 150px; /* Increased from 50px */
+    min-height: 150px; /* Increased from 50px */
+    background: #222; /* Optional: adds visible background while resizing */
+    z-index: 1; /* Ensure image is above other elements */
+    transition: transform 0.2s ease;
+    cursor: zoom-in; /* Changes cursor to zoom icon on hover */
+  }
+
+  .zoom-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .item:hover .zoom-icon {
+    opacity: 1;
+  }
+
+  /* Add styles for the enlarged image overlay */
+  .image-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .image-overlay.active {
+    opacity: 1;
+  }
+
+  .image-overlay img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    border: 1px solid var(--border);
+  }
+
+  .item .price {
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 5px;
+    display: inline-block;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .item .note {
+    margin-top: 5px;
+    font-size: 0.9rem;  /* Changed from 1.5rem */
+    font-weight: 400;   /* Changed from 600 */
+    padding: 8px;
+    display: inline-block;
+  }
+
+  .item .date {
+    margin-top: 5px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    padding: 8px;
+    display: inline-block;
+  }
+
+  .item .title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-top: 5px;
+    padding: 8px;
+    text-transform: uppercase; /* Add this line */
+    background: #090909; /* Add background color */
+    border-radius: 4px; /* Optional: adds rounded corners */
+    width: 100%; /* Ensures the background spans full width */
+  }
+
+  /* Add after .item .title */
+  .item .link {
+    margin-top: 5px;
+    font-size: 1rem;
+    padding: 8px;
+    display: block;
+    color: #4a9eff;
+    text-decoration: underline;
+    cursor: pointer;
+    word-break: break-all;
+  }
+
+  /* Allow user selection for the link text */
+  .item .link[contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+  }
+
+  /* Updated title-item class to add background opacity and blur */
+  .title-item {
+    position: absolute;
+    background: rgba(9, 9, 9, 0.5); /* 50% opacity */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px); /* For Safari */
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    padding-right: 30px;
+    cursor: move;
+    min-width: 100px;
+    max-width: 300px;
+    overflow: visible;
+    z-index: 2; /* Keep titles above other items */
+  }
+
+  .title-item .title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-top: 5px;
+    padding: 8px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    width: 100%;
+    color: var(--text);
+  }
+
+  /* Allow text selection only when editing notes and prices */
+  .item [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+  }
+
+  .item [contenteditable="true"]:focus {
+    outline: none;
+    border: none;
+  }
+
+  .connection-dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--dot-inactive);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0; /* Hide dots by default */
+    bottom: -4px;  /* Position at bottom */
+    left: -4px;    /* Position at left */
+  }
+
+  .item:hover .connection-dot,
+  .item:hover .delete-btn,
+  .title-item:hover .connection-dot,
+  .title-item:hover .delete-btn {
+    opacity: 1;
+  }
+
+  .connecting .connection-dot {
+    opacity: 1;
+  }
+
+  #imageInput {
+    display: none;
+  }
+
+  .connection-line {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0; /* Keep lines below items */
+  }
+
+  .delete-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 20px;
+    height: 20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1;
+    transition: all 0.2s ease;
+    opacity: 0; /* Hide by default */
+  }
+
+  /* Add hover state for the title container item */
+  .title-item:hover .delete-btn {
+    opacity: 1;
+  }
+
+  .delete-btn:hover {
+    background: #ff3333;
+    border-color: #ff3333;
+  }
+
+  .profile-image {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: #222;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid var(--border); /* Added border */
+  }
+
+  .profile-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-image:hover::after {
+    content: 'Click to change';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 12px;
+    padding: 4px;
+    text-align: center;
+  }
+
+  .profile-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    padding: 4px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .profile-description {
+    font-size: 0.9rem;
+    text-align: center;
+    width: 100%;
+    padding: 4px;
+  }
+
+  /* Updated profile-item to ensure delete button visibility */
+  .profile-item {
+    position: absolute;
+    background: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    padding-right: 30px; /* Space for delete button */
+    cursor: move;
+    min-width: 200px;
+    max-width: 300px;
+    overflow: visible;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Ensure delete button shows on hover for profile items */
+  .profile-item:hover .delete-btn,
+  .profile-item:hover .connection-dot {
+    opacity: 1;
+  }
+
+  .toolbar button:last-child {
+    margin-left: auto;
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    /* Keep existing styles */
+  }
+
+  /* Add hover effect for screenshot button */
+  .toolbar button:last-child:hover {
+    background: #2a2a2a;
+    transform: scale(1.05);
+  }
+
+  .toolbar button:last-child:active {
+    transform: scale(0.95);
+  }
+
+  /* Disabled state */
+  .toolbar button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="document.getElementById('imageInput').click()">Add Image</button>
+    <button onclick="addNote()">Add Note</button>
+    <button onclick="addPrice()">Add Price</button>
+    <button onclick="addDate()">Add Date</button>
+    <button onclick="addTitle()">Add Title</button>
+    <button onclick="addLink()">Add Link</button>
+    <button onclick="addProfile()">Add Profile</button>
+    <button onclick="clearBoard()">Clear Board</button>
+    <button onclick="takeScreenshot()" style="margin-left: auto;">📸 Screenshot</button>
+  </div>
+  
+  <div class="moodboard" id="moodboard"></div>
+  <input type="file" id="imageInput" accept="image/*" multiple>
+
+<script>
+let draggingElement = null;
+let offset = { x: 0, y: 0 };
+let connectingFrom = null;
+let connections = [];
+
+document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+document.addEventListener('mousemove', handleDrag);
+document.addEventListener('mouseup', () => {
+  draggingElement = null;
+  if (connectingFrom) {
+    connectingFrom = null;
+    const tempLine = document.querySelector('.temp-line');
+    if (tempLine) tempLine.remove();
+    document.getElementById('moodboard').classList.remove('connecting'); // Remove connecting class
+  }
+});
+
+function handleImageUpload(e) {
+  const files = e.target.files;
+  
+  for(let file of files) {
+    const reader = new FileReader();
+    
+    reader.onload = function(event) {
+      const item = createItem('image');
+      
+      // Create image container to hold both image and zoom icon
+      const imgContainer = document.createElement('div');
+      imgContainer.style.position = 'relative';
+      
+      // Create and add the zoom icon
+      const zoomIcon = document.createElement('div');
+      zoomIcon.className = 'zoom-icon';
+      zoomIcon.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 3L21 3M21 3V9M21 3L13 11" stroke="white" stroke-width="2"/>
+          <path d="M9 21L3 21M3 21L3 15M3 21L11 13" stroke="white" stroke-width="2"/>
+        </svg>
+      `;
+      
+      const img = document.createElement('img');
+      img.src = event.target.result;
+      
+      // Add click handler for image enlargement
+      img.addEventListener('click', function(e) {
+        e.stopPropagation(); // Prevent drag event
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'image-overlay';
+        
+        const enlargedImg = document.createElement('img');
+        enlargedImg.src = this.src;
+        
+        overlay.appendChild(enlargedImg);
+        document.body.appendChild(overlay);
+        
+        // Add slight delay before showing overlay for smooth transition
+        requestAnimationFrame(() => {
+          overlay.classList.add('active');
+        });
+        
+        // Click handler to close overlay
+        overlay.addEventListener('click', function() {
+          overlay.classList.remove('active');
+          setTimeout(() => overlay.remove(), 300); // Remove after transition
+        });
+      });
+      
+      imgContainer.appendChild(img);
+      imgContainer.appendChild(zoomIcon);
+      item.appendChild(imgContainer);
+      positionItem(item);
+      addConnectionDots(item);
+    }
+    
+    reader.readAsDataURL(file);
+  }
+}
+
+function addNote() {
+  const item = createItem('note');
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.contentEditable = true;
+  note.innerText = 'Click to edit note';
+  item.appendChild(note);
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+function addPrice() {
+  const item = createItem('price');
+  const price = document.createElement('div');
+  price.className = 'price';
+  price.contentEditable = true;
+  price.innerText = '$0.00';
+  item.appendChild(price);
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+function addDate() {
+  const item = createItem('date');
+  const date = document.createElement('div');
+  date.className = 'date';  // Changed from 'note' to 'date'
+  date.contentEditable = true;
+  date.innerText = new Date().toLocaleDateString();
+  item.appendChild(date);
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+function addTitle() {
+  const item = document.createElement('div');
+  item.className = 'title-item'; // Use new class
+  item.dataset.type = 'title';
+  
+  // Add delete button
+  const deleteBtn = document.createElement('div');
+  deleteBtn.className = 'delete-btn';
+  deleteBtn.innerHTML = '×';
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    connections = connections.filter(connection => {
+      if (connection.fromItem === item || connection.toItem === item) {
+        connection.line.remove();
+        return false;
+      }
+      return true;
+    });
+    item.remove();
+  });
+  item.appendChild(deleteBtn);
+  
+  // Add drag handling
+  item.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('connection-dot') || e.target.classList.contains('delete-btn')) return;
+    draggingElement = item;
+    const rect = item.getBoundingClientRect();
+    offset.x = e.clientX - rect.left;
+    offset.y = e.clientY - rect.top;
+  });
+
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.contentEditable = true;
+  title.innerText = 'Title Here';
+  item.appendChild(title);
+  
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+function addLink() {
+  const item = createItem('link');
+  
+  // Create link container
+  const linkContainer = document.createElement('div');
+  linkContainer.className = 'link';
+  linkContainer.contentEditable = true;
+  linkContainer.innerText = 'https://example.com';
+  
+  // Add click handler to open link
+  linkContainer.addEventListener('click', (e) => {
+    // Only open link if not editing
+    if (document.activeElement !== e.target) {
+      e.preventDefault();
+      const url = e.target.innerText;
+      if (isValidUrl(url)) {
+        window.open(url, '_blank');
+      }
+    }
+  });
+  
+  // Add blur handler to validate URL
+  linkContainer.addEventListener('blur', (e) => {
+    const url = e.target.innerText;
+    if (!isValidUrl(url)) {
+      e.target.style.color = '#ff4444';
+    } else {
+      e.target.style.color = '#4a9eff';
+    }
+  });
+
+  item.appendChild(linkContainer);
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+// Add this helper function to validate URLs
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function addProfile() {
+  const item = document.createElement('div');
+  item.className = 'profile-item';
+  item.dataset.type = 'profile';
+  
+  // Add delete button
+  const deleteBtn = document.createElement('div');
+  deleteBtn.className = 'delete-btn';
+  deleteBtn.innerHTML = '×';
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    connections = connections.filter(connection => {
+      if (connection.fromItem === item || connection.toItem === item) {
+        connection.line.remove();
+        return false;
+      }
+      return true;
+    });
+    item.remove();
+  });
+  item.appendChild(deleteBtn);
+  
+  // Add profile image container
+  const imageContainer = document.createElement('div');
+  imageContainer.className = 'profile-image';
+  
+  // Add image input
+  const imageInput = document.createElement('input');
+  imageInput.type = 'file';
+  imageInput.accept = 'image/*';
+  imageInput.style.display = 'none';
+  
+  // Add default image
+  const img = document.createElement('img');
+  img.src = 'data:image/svg+xml,' + encodeURIComponent(`
+    <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" fill="#222"/>
+      <circle cx="50" cy="40" r="20" fill="#444"/>
+      <circle cx="50" cy="90" r="30" fill="#444"/>
+    </svg>
+  `);
+  
+  imageContainer.appendChild(img);
+  imageContainer.appendChild(imageInput);
+  
+  // Handle image upload
+  imageContainer.addEventListener('click', () => imageInput.click());
+  imageInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  });
+  
+  // Add name
+  const name = document.createElement('div');
+  name.className = 'profile-name';
+  name.contentEditable = true;
+  name.innerText = 'Name Here';
+  
+  // Add description
+  const description = document.createElement('div');
+  description.className = 'profile-description';
+  description.contentEditable = true;
+  description.innerText = 'Click to edit description';
+  
+  // Add drag handling
+  item.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('connection-dot') || 
+        e.target.classList.contains('delete-btn') ||
+        e.target.classList.contains('profile-name') ||
+        e.target.classList.contains('profile-description')) return;
+    draggingElement = item;
+    const rect = item.getBoundingClientRect();
+    offset.x = e.clientX - rect.left;
+    offset.y = e.clientY - rect.top;
+  });
+  
+  // Assemble profile
+  item.appendChild(imageContainer);
+  item.appendChild(name);
+  item.appendChild(description);
+  
+  positionItem(item);
+  addConnectionDots(item);
+}
+
+function createItem(type) {
+  const item = document.createElement('div');
+  item.className = 'item';
+  item.dataset.type = type;
+  
+  // Add delete button
+  const deleteBtn = document.createElement('div');
+  deleteBtn.className = 'delete-btn';
+  deleteBtn.innerHTML = '×';
+  deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent drag event
+      // Remove all connections associated with this item
+      connections = connections.filter(connection => {
+          if (connection.fromItem === item || connection.toItem === item) {
+              connection.line.remove();
+              return false;
+          }
+          return true;
+      });
+      item.remove();
+  });
+  item.appendChild(deleteBtn);
+  
+  item.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('connection-dot') || e.target.classList.contains('delete-btn')) return;
+      draggingElement = item;
+      const rect = item.getBoundingClientRect();
+      offset.x = e.clientX - rect.left;
+      offset.y = e.clientY - rect.top;
+  });
+  
+  return item;
+}
+
+function addConnectionDots(item) {
+  if (!item) return; // Add guard clause
+  
+  const dot = document.createElement('div');
+  dot.className = 'connection-dot';
+  
+  dot.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (!item || !dot) return;
+    
+    connectingFrom = {
+      dot: dot,
+      item: item
+    };
+    createTempLine(e);
+  });
+  
+  dot.addEventListener('mouseup', (e) => {
+    e.stopPropagation();
+    if (!connectingFrom || !item || connectingFrom.item === item || !dot) {
+      cleanupConnection();
+      return;
+    }
+    
+    createConnection(connectingFrom.item, item, connectingFrom.dot, dot);
+    if (connectingFrom.dot) connectingFrom.dot.classList.add('active');
+    dot.classList.add('active');
+  });
+  
+  item.appendChild(dot);
+}
+
+function createTempLine(e) {
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  line.classList.add('connection-line', 'temp-line');
+  line.style.position = 'absolute';
+  line.style.width = '100%';
+  line.style.height = '100%';
+  line.style.left = '0';
+  line.style.top = '0';
+  line.style.pointerEvents = 'none';
+  
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute('stroke', 'var(--text)');
+  path.setAttribute('stroke-width', '2');
+  path.setAttribute('fill', 'none');
+  
+  line.appendChild(path);
+  const moodboard = document.getElementById('moodboard');
+  moodboard.appendChild(line);
+  moodboard.classList.add('connecting'); // Add connecting class
+  
+  document.addEventListener('mousemove', updateTempLine);
+}
+
+function updateTempLine(e) {
+  if (!connectingFrom || !connectingFrom.dot) {
+    cleanupConnection();
+    return;
+  }
+  
+  const tempLine = document.querySelector('.temp-line');
+  if (!tempLine) return;
+  
+  const path = tempLine.querySelector('path');
+  if (!path) return;
+  
+  try {
+    const fromRect = connectingFrom.dot.getBoundingClientRect();
+    const board = document.getElementById('moodboard');
+    if (!board) return;
+    
+    const boardRect = board.getBoundingClientRect();
+    
+    const x1 = fromRect.left + fromRect.width/2 - boardRect.left;
+    const y1 = fromRect.top + fromRect.height/2 - boardRect.top;
+    const x2 = e.clientX - boardRect.left;
+    const y2 = e.clientY - boardRect.top;
+    
+    drawOrthogonalPath(path, x1, y1, x2, y2);
+  } catch (error) {
+    console.warn('Error updating temp line:', error);
+    cleanupConnection();
+  }
+}
+
+function createConnection(fromItem, toItem, fromDot, toDot) {
+  // Validate all required parameters exist
+  if (!fromItem || !toItem || !fromDot || !toDot) {
+    console.warn('Invalid connection parameters');
+    cleanupConnection();
+    return;
+  }
+  
+  const board = document.getElementById('moodboard');
+  if (!board) {
+    console.warn('Moodboard element not found');
+    cleanupConnection();
+    return;
+  }
+
+  try {
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    line.classList.add('connection-line');
+    line.style.position = 'absolute';
+    line.style.width = '100%';
+    line.style.height = '100%';
+    line.style.left = '0';
+    line.style.top = '0';
+    line.style.pointerEvents = 'none';
+    
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute('stroke', 'var(--text)');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    
+    line.appendChild(path);
+    board.appendChild(line);
+    
+    const connection = {
+      line: line,
+      path: path,
+      fromItem: fromItem,
+      toItem: toItem,
+      fromDot: fromDot,
+      toDot: toDot
+    };
+    
+    connections.push(connection);
+    updateConnection(connection);
+    cleanupConnection();
+  } catch (error) {
+    console.warn('Error creating connection:', error);
+    cleanupConnection();
+  }
+}
+
+// Add helper function to cleanup temporary connection state
+function cleanupConnection() {
+  connectingFrom = null;
+  const tempLine = document.querySelector('.temp-line');
+  if (tempLine) tempLine.remove();
+  const board = document.getElementById('moodboard');
+  if (board) board.classList.remove('connecting');
+  document.removeEventListener('mousemove', updateTempLine);
+}
+
+function updateConnection(connection) {
+  if (!connection || !connection.fromDot || !connection.toDot || !connection.path) {
+    if (connection && connection.line) {
+      connection.line.remove();
+      const index = connections.indexOf(connection);
+      if (index > -1) {
+        connections.splice(index, 1);
+      }
+    }
+    return;
+  }
+  
+  const board = document.getElementById('moodboard');
+  if (!board) return;
+  
+  // Verify elements are still in the DOM
+  if (!document.contains(connection.fromDot) || !document.contains(connection.toDot)) {
+    connection.line.remove();
+    const index = connections.indexOf(connection);
+    if (index > -1) {
+      connections.splice(index, 1);
+    }
+    return;
+  }
+
+  try {
+    const fromRect = connection.fromDot.getBoundingClientRect();
+    const toRect = connection.toDot.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    
+    if (!fromRect || !toRect || !boardRect) return;
+    
+    const x1 = fromRect.left + fromRect.width/2 - boardRect.left;
+    const y1 = fromRect.top + fromRect.height/2 - boardRect.top;
+    const x2 = toRect.left + toRect.width/2 - boardRect.left;
+    const y2 = toRect.top + toRect.height/2 - boardRect.top;
+    
+    if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return;
+    
+    drawOrthogonalPath(connection.path, x1, y1, x2, y2);
+  } catch (error) {
+    console.warn('Error updating connection:', error);
+    if (connection.line) {
+      connection.line.remove();
+    }
+    const index = connections.indexOf(connection);
+    if (index > -1) {
+      connections.splice(index, 1);
+    }
+  }
+}
+
+function drawOrthogonalPath(path, x1, y1, x2, y2) {
+  const padding = 30; // Increased padding for better element avoidance
+  const radius = 8; // Corner radius
+  
+  // Calculate midpoints with padding
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  
+  // Calculate direction and distance
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  // Adjust control points based on distance
+  const cp = Math.min(distance / 3, padding * 1.5); // Control point distance
+  
+  let d = `M ${x1} ${y1}`;
+  
+  if (Math.abs(dy) > Math.abs(dx)) {
+    // Vertical primary path with curves
+    const curve1 = y1 < y2 ? y1 + cp : y1 - cp;
+    const curve2 = y1 < y2 ? midY - cp : midY + cp;
+    const curve3 = y2 < y1 ? y2 + cp : y2 - cp;
+    
+    d += ` C ${x1} ${curve1},
+           ${x1} ${curve2},
+           ${x1} ${midY}
+           L ${x2} ${midY}
+           C ${x2} ${midY + (y2 > y1 ? cp : -cp)},
+           ${x2} ${curve3},
+           ${x2} ${y2}`;
+  } else {
+    // Horizontal primary path with curves
+    const curve1 = x1 < x2 ? x1 + cp : x1 - cp;
+    const curve2 = x1 < x2 ? midX - cp : midX + cp;
+    const curve3 = x2 < x1 ? x2 + cp : x2 - cp;
+    
+    d += ` C ${curve1} ${y1},
+           ${curve2} ${y1},
+           ${midX} ${y1}
+           L ${midX} ${y2}
+           C ${midX + (x2 > x1 ? cp : -cp)} ${y2},
+           ${curve3} ${y2},
+           ${x2} ${y2}`;
+  }
+  
+  path.setAttribute('d', d);
+}
+
+function positionItem(item) {
+  const board = document.getElementById('moodboard');
+  const rect = board.getBoundingClientRect();
+  
+  item.style.left = Math.random() * (rect.width - 150) + 'px';
+  item.style.top = Math.random() * (rect.height - 150) + 'px';
+  
+  board.appendChild(item);
+}
+
+function handleDrag(e) {
+  if (!draggingElement) return;
+  
+  const board = document.getElementById('moodboard');
+  if (!board) return;
+  
+  try {
+    const rect = board.getBoundingClientRect();
+    if (!rect) return;
+    
+    let newX = e.clientX - rect.left - offset.x;
+    let newY = e.clientY - rect.top - offset.y;
+    
+    // Add bounds checking
+    if (isNaN(newX) || isNaN(newY)) return;
+    
+    newX = Math.max(0, Math.min(newX, rect.width - (draggingElement.offsetWidth || 0)));
+    newY = Math.max(0, Math.min(newY, rect.height - (draggingElement.offsetHeight || 0)));
+    
+    draggingElement.style.left = newX + 'px';
+    draggingElement.style.top = newY + 'px';
+    
+    // Update connections with additional validation
+    connections = connections.filter(connection => {
+      if (!connection || !connection.fromItem || !connection.toItem) {
+        if (connection && connection.line) {
+          connection.line.remove();
+        }
+        return false;
+      }
+      
+      if ((connection.fromItem === draggingElement || connection.toItem === draggingElement)) {
+        try {
+          updateConnection(connection);
+          return true;
+        } catch (error) {
+          console.warn('Error updating connection:', error);
+          if (connection.line) connection.line.remove();
+          return false;
+        }
+      }
+      return true;
+    });
+  } catch (error) {
+    console.warn('Error during drag:', error);
+    draggingElement = null;
+  }
+}
+
+function clearBoard() {
+  if (confirm('Are you sure you want to clear the moodboard?')) {
+    document.getElementById('moodboard').innerHTML = '';
+    connections = [];
+  }
+}
+
+function takeScreenshot() {
+  // Add visual feedback
+  const button = event.target;
+  const originalText = button.innerText;
+  button.innerText = '📸 Capturing...';
+  button.disabled = true;
+
+  // Get the moodboard element
+  const moodboard = document.getElementById('moodboard');
+  
+  // Configure html2canvas options
+  const options = {
+    backgroundColor: '#090909', // Match the background
+    scale: 2, // Higher quality
+    useCORS: true, // Handle cross-origin images
+    allowTaint: true,
+    foreignObjectRendering: true
+  };
+
+  // Take the screenshot
+  html2canvas(moodboard, options).then(canvas => {
+    // Convert to blob
+    canvas.toBlob(blob => {
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'moodboard-' + new Date().toISOString().slice(0,10) + '.png';
+      link.href = url;
+      link.click();
+      
+      // Cleanup
+      URL.revokeObjectURL(url);
+      button.innerText = originalText;
+      button.disabled = false;
+    }, 'image/png', 1.0);
+  }).catch(err => {
+    console.error('Screenshot failed:', err);
+    button.innerText = originalText;
+    button.disabled = false;
+  });
+}
+</script>
+</body></html>
