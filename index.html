@@ -410,6 +410,29 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  /* Add overlay styles */
+  .screenshot-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #090909;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: var(--text);
+    font-size: 24px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .screenshot-overlay.active {
+    opacity: 1;
+  }
 </style>
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </head>
@@ -1068,45 +1091,141 @@ function clearBoard() {
 }
 
 function takeScreenshot() {
-  // Add visual feedback
   const button = event.target;
   const originalText = button.innerText;
   button.innerText = '📸 Capturing...';
   button.disabled = true;
 
-  // Get the moodboard element
+  // Create and show overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'screenshot-overlay';
+  overlay.textContent = 'Taking Screenshot';
+  document.body.appendChild(overlay);
+  
+  // Short delay to ensure overlay renders
+  requestAnimationFrame(() => {
+    overlay.classList.add('active');
+  });
+
   const moodboard = document.getElementById('moodboard');
   
-  // Configure html2canvas options
-  const options = {
-    backgroundColor: '#090909', // Match the background
-    scale: 2, // Higher quality
-    useCORS: true, // Handle cross-origin images
-    allowTaint: true,
-    foreignObjectRendering: true
-  };
+  // Get all items on the board
+  const items = Array.from(moodboard.querySelectorAll('.item, .title-item, .profile-item'));
+  
+  if (items.length === 0) {
+    // If no items, use full moodboard
+    html2canvas(moodboard, {
+      backgroundColor: '#090909',
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false
+    }).then(canvas => {
+      handleScreenshotResult(button, originalText)(canvas);
+      // Remove overlay after screenshot
+      overlay.classList.remove('active');
+      setTimeout(() => overlay.remove(), 300);
+    });
+    return;
+  }
 
-  // Take the screenshot
-  html2canvas(moodboard, options).then(canvas => {
-    // Convert to blob
+  // Calculate maximum bounds with padding
+  const padding = 100;
+  let maxBottom = 0;
+  let maxRight = 0;
+
+  items.forEach(item => {
+    const computedStyle = window.getComputedStyle(item);
+    const left = parseFloat(item.style.left);
+    const top = parseFloat(item.style.top);
+    const width = item.offsetWidth;
+    const height = item.offsetHeight;
+
+    maxBottom = Math.max(maxBottom, top + height);
+    maxRight = Math.max(maxRight, left + width);
+  });
+
+  // Set explicit canvas size with padding
+  const canvasWidth = Math.max(maxRight + padding, moodboard.clientWidth);
+  const canvasHeight = Math.max(maxBottom + padding, moodboard.clientHeight);
+
+  // Create a temporary div to capture
+  const captureDiv = document.createElement('div');
+  captureDiv.style.position = 'absolute';
+  captureDiv.style.top = '0';
+  captureDiv.style.left = '0';
+  captureDiv.style.width = `${canvasWidth}px`;
+  captureDiv.style.height = `${canvasHeight}px`;
+  captureDiv.style.backgroundColor = '#090909';
+  captureDiv.style.backgroundImage = window.getComputedStyle(moodboard).backgroundImage;
+  captureDiv.style.backgroundSize = window.getComputedStyle(moodboard).backgroundSize;
+  captureDiv.style.backgroundPosition = window.getComputedStyle(moodboard).backgroundPosition;
+  captureDiv.style.backgroundBlendMode = 'overlay';
+
+  // Clone items to capture div
+  items.forEach(item => {
+    const clonedItem = item.cloneNode(true);
+    clonedItem.style.position = 'absolute';
+    clonedItem.style.left = item.style.left;
+    clonedItem.style.top = item.style.top;
+    captureDiv.appendChild(clonedItem);
+  });
+
+  document.body.appendChild(captureDiv);
+
+  html2canvas(captureDiv, {
+    backgroundColor: '#090909',
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    logging: false,
+    width: canvasWidth,
+    height: canvasHeight
+  }).then(canvas => {
+    document.body.removeChild(captureDiv);
     canvas.toBlob(blob => {
-      // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.download = 'moodboard-' + new Date().toISOString().slice(0,10) + '.png';
       link.href = url;
       link.click();
-      
-      // Cleanup
       URL.revokeObjectURL(url);
+      
       button.innerText = originalText;
       button.disabled = false;
+      
+      // Remove overlay
+      overlay.classList.remove('active');
+      setTimeout(() => overlay.remove(), 300);
     }, 'image/png', 1.0);
   }).catch(err => {
     console.error('Screenshot failed:', err);
+    document.body.removeChild(captureDiv);
     button.innerText = originalText;
     button.disabled = false;
+    alert('Screenshot failed. Please try again.');
+    
+    // Remove overlay on error
+    overlay.classList.remove('active');
+    setTimeout(() => overlay.remove(), 300);
   });
+}
+
+// Add the helper function for handling screenshot results
+function handleScreenshotResult(button, originalText) {
+  return function(canvas) {
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'moodboard-' + new Date().toISOString().slice(0,10) + '.png';
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      button.innerText = originalText;
+      button.disabled = false;
+    }, 'image/png', 1.0);
+  };
 }
 </script>
 </body></html>
